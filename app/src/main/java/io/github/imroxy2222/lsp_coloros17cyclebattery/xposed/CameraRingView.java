@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
@@ -109,6 +110,13 @@ public class CameraRingView extends View {
         postInvalidate();
     }
 
+    @Override
+    protected void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // 横竖屏切换后重绘（横屏不绘制）
+        postInvalidate();
+    }
+
     private void readBattery(Intent intent) {
         try {
             int raw = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
@@ -130,6 +138,10 @@ public class CameraRingView extends View {
     }
 
     private void drawRing(Canvas canvas) {
+        // 横屏时不显示电量环
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            return;
+        }
         // -1 表示电量未知：不绘制
         if (level < 0) return;
         if (getWidth() == 0 || getHeight() == 0) return;
