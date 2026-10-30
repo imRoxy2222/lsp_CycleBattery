@@ -1,0 +1,17 @@
+[
+	{
+		"label": "Build only",
+		"command": "./gradlew.bat :app:assemble",
+		"use_new_terminal": false,
+	},
+	{
+		"label": "Install Debug APK",
+		"command": "./gradlew.bat :app:installDebug",
+		"use_new_terminal": false,
+	},
+	{
+		"label": "Install Release APK",
+		"command": "./gradlew.bat :app:assembleRelease && adb install -r ./app/build/outputs/apk/release/app-release.apk",
+		"use_new_terminal": false,
+	},
+]
