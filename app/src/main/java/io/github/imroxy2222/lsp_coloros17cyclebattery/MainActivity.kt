@@ -1,6 +1,9 @@
 package io.github.imroxy2222.lsp_coloros17cyclebattery
 
+import android.content.ComponentName
+import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -160,6 +164,34 @@ fun SettingsScreen() {
             error = false,
         )
 
+        // ---------------- 隐藏桌面图标 ----------------
+        val context = LocalContext.current
+        var launcherHidden by remember { mutableStateOf(isLauncherHidden(context)) }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("隐藏桌面图标", fontSize = 16.sp)
+                    Text(
+                        "隐藏后仅可从 LSPosed 管理器的\"启动\"按钮进入本页面",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = launcherHidden,
+                    onCheckedChange = { v ->
+                        setLauncherHidden(context, v)
+                        launcherHidden = v
+                    },
+                )
+            }
+        }
+
         // ---------------- 大小 / 位置 / 线宽 ----------------
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -262,8 +294,7 @@ fun SettingsScreen() {
 }
 
 @Composable
-private fun SliderRow(
-    label: String,
+private fun SliderRow(    label: String,
     value: Float,
     range: ClosedFloatingPointRange<Float>,
     decimals: Int,
@@ -325,6 +356,25 @@ private fun SliderRow(
             onValueChangeFinished = { onCommit(local) },
         )
     }
+}
+
+private const val LAUNCHER_ALIAS = "io.github.imroxy2222.lsp_coloros17cyclebattery.LauncherAlias"
+
+private fun isLauncherHidden(context: Context): Boolean =
+    context.packageManager.getComponentEnabledSetting(
+        ComponentName(context, LAUNCHER_ALIAS),
+    ) == PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+private fun setLauncherHidden(context: Context, hidden: Boolean) {
+    context.packageManager.setComponentEnabledSetting(
+        ComponentName(context, LAUNCHER_ALIAS),
+        if (hidden) {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        },
+        PackageManager.DONT_KILL_APP,
+    )
 }
 
 private fun formatNum(v: Float, decimals: Int): String =

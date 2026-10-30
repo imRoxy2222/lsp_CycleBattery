@@ -12,6 +12,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ColorOS17CycleBattery">
+        <!--
+            主界面：exported 供 LSPosed 显式启动；INFO 过滤器让
+            getLaunchIntentForPackage 在 LAUNCHER alias 被禁用（图标已隐藏）时
+            仍能返回启动 Intent，LSPosed 管理器的"启动"按钮因此保持可用
+            （CATEGORY_INFO 不会被桌面启动器显示为图标）。
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -21,9 +27,24 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
-                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.INFO" />
             </intent-filter>
         </activity>
+
+        <activity-alias
+            android:name=".LauncherAlias"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>
