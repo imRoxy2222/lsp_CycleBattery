@@ -10,3 +10,20 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# ==== libxposed 模块 ====
+-adaptresourcefilecontents META-INF/xposed/java_init.list
+-keep,allowoptimization,allowobfuscation public class * extends io.github.libxposed.api.XposedModule {
+    public ();
+}
+-keep class io.github.imroxy2222.lsp_coloros17cyclebattery.xposed.MainHook { *; }
+-keep class io.github.imroxy2222.lsp_coloros17cyclebattery.xposed.RingBatteryDrawable { *; }
+-keep class io.github.imroxy2222.lsp_coloros17cyclebattery.xposed.BatteryConfig { *; }
+-keepclassmembers class io.github.imroxy2222.lsp_coloros17cyclebattery.xposed.** { *; }
+
+# ==== DexKit ====
+-keep class org.lsposed.dexkit.** { *; }
+-dontwarn org.lsposed.dexkit.**
+
+# ==== libxposed service ====
+-dontwarn io.github.libxposed.service.**
