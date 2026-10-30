@@ -41,7 +41,6 @@ public class CameraRingView extends View {
     private volatile int level = -1;
     private volatile boolean charging = false;
 
-    private final Paint trackPaint;
     private final Paint levelPaint;
     private final RectF ringRect = new RectF();
 
@@ -54,9 +53,6 @@ public class CameraRingView extends View {
 
     public CameraRingView(Context context) {
         super(context);
-        trackPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
-        trackPaint.setStyle(Paint.Style.STROKE);
-        trackPaint.setStrokeCap(Paint.Cap.ROUND);
         levelPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
         levelPaint.setStyle(Paint.Style.STROKE);
         levelPaint.setStrokeCap(Paint.Cap.ROUND);
@@ -158,10 +154,7 @@ public class CameraRingView extends View {
 
         ringRect.set(cx - radius, cy - radius, cx + radius, cy + radius);
 
-        // 背景轨道：同色 20% 透明度的整圆
-        trackPaint.setStrokeWidth(stroke);
-        trackPaint.setColor((color & 0x00FFFFFF) | 0x33000000);
-        canvas.drawArc(ringRect, 0f, 360f, false, trackPaint);
+        // 未充电部分不绘制任何轨道：进度弧以外区域 100% 透明
 
         // 进度环：从顶部顺时针，level * 3.6 度
         int clamped = Math.max(0, Math.min(level, 100));
