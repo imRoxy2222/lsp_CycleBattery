@@ -1,4 +1,8 @@
+import java.io.File
 import java.util.Properties
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.api.tasks.Input
 
 plugins {
     alias(libs.plugins.android.application)
@@ -11,6 +15,34 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+/**
+ * versionCode 数据源：当前分支提交 commit 数（git rev-list --count HEAD）。
+ * 用 ValueSource 包装以兼容配置缓存（值变化时 Gradle 会自动失效缓存）。
+ * git 不可用（未初始化仓库/无 git 命令）时回退为 1，保证任何环境都能构建。
+ */
+interface CommitCountParameters : ValueSourceParameters {
+    @get:Input
+    val projectDir: Property<String>
+}
+
+abstract class CommitCountValueSource : ValueSource<Int, CommitCountParameters> {
+    override fun obtain(): Int = try {
+        val process = ProcessBuilder("git", "rev-list", "--count", "HEAD")
+            .directory(File(parameters.projectDir.get()))
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        output.toIntOrNull() ?: 1
+    } catch (_: Throwable) {
+        1
+    }
+}
+
+val commitCount: Int = providers.of(CommitCountValueSource::class.java) {
+    parameters.projectDir.set(rootDir.absolutePath)
+}.get()
+
 android {
     namespace = "io.github.imroxy2222.lsp_coloros17cyclebattery"
     compileSdk {
@@ -19,9 +51,9 @@ android {
 
     defaultConfig {
         applicationId = "io.github.imroxy2222.lsp_coloros17cyclebattery"
-        minSdk = 36
+        minSdk = 35
         targetSdk = 37
-        versionCode = 1
+        versionCode = commitCount
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
