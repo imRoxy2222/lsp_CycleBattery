@@ -39,7 +39,9 @@ jobs:
 
           # ---- 2) 序号校验：必须存在 N-1 才能打 N ----
           # 排除本次推送的 tag 自身后统计已有版本 tag 数量，下一个序号应为 COUNT+1
-          COUNT=$(git tag --list '[0-9]*-[0-9]*' | grep -v "^${TAG}$" | wc -l)
+          # 注意：首次发布时 git tag --list 输出为空，grep 无匹配会返回 1，
+          # 在 set -euo pipefail 下会静默退出，故用 { ... || true; } 吞掉 grep 的退出码
+          COUNT=$(git tag --list '[0-9]*-[0-9]*' | { grep -v "^${TAG}$" || true; } | wc -l)
           EXPECTED=$((COUNT + 1))
           if [ "$N" -ne "$EXPECTED" ]; then
             echo "::error::序号不连续：已有 $COUNT 个版本 tag，下一个序号必须为 $EXPECTED，收到 $N"
