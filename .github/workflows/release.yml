@@ -1,0 +1,181 @@
+name: Release
+
+# 打 tag（N-C 格式）自动构建并发布 Release
+# 规则：
+#   1. tag 格式必须为 N-C（如 1-8），N 为版本序号从 1 开始，C 为该提交在 master 上的 commit 数
+#   2. 必须已存在 N-1 号 tag 才允许打 N（严格连续，不允许跳号/重号）
+#   3. tag 所指提交必须在 master 分支上，且实际 commit 数必须等于 C
+on:
+  push:
+    tags:
+      - '[0-9]*-[0-9]*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # versionCode 依赖 git 完整历史（git rev-list --count），必须 fetch-depth: 0
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 校验 tag 规则
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # ---- 1) 格式校验：N-C ----
+          if ! [[ "$TAG" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            echo "::error::tag 必须为 N-C 格式（如 1-8），当前为: $TAG"
+            exit 1
+          fi
+          N="${BASH_REMATCH[1]}"
+          C="${BASH_REMATCH[2]}"
+
+          # ---- 2) 序号校验：必须存在 N-1 才能打 N ----
+          # 排除本次推送的 tag 自身后统计已有版本 tag 数量，下一个序号应为 COUNT+1
+          COUNT=$(git tag --list '[0-9]*-[0-9]*' | grep -v "^${TAG}$" | wc -l)
+          EXPECTED=$((COUNT + 1))
+          if [ "$N" -ne "$EXPECTED" ]; then
+            echo "::error::序号不连续：已有 $COUNT 个版本 tag，下一个序号必须为 $EXPECTED，收到 $N"
+            echo "       （N=1 时要求此前没有任何版本 tag；打 N 前必须已存在 N-1）"
+            exit 1
+          fi
+
+          # ---- 3) 位置校验：tag 必须打在 master 上 ----
+          SHA=$(git rev-list -n 1 "$TAG")
+          git fetch origin master --no-tags
+          if ! git merge-base --is-ancestor "$SHA" origin/master; then
+            echo "::error::tag 所指提交不在 master 分支上"
+            exit 1
+          fi
+
+          # ---- 4) commit 数校验：实际 commit 数必须等于 C ----
+          ACTUAL=$(git rev-list --count "$SHA")
+          if [ "$C" -ne "$ACTUAL" ]; then
+            echo "::error::commit 数不符：tag 声称 $C，实际为 $ACTUAL（tag 应打在 master 对应提交上）"
+            exit 1
+          fi
+
+          echo "TAG_NAME=$TAG" >> "$GITHUB_ENV"
+          echo "校验通过：tag=$TAG 序号=$N commit数=$C"
+
+      - name: 配置 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: 配置 Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # 优先使用仓库 Secrets 中的密钥（推荐，配合密钥不提交仓库）；
+      # 若未配置 Secrets，则回退使用仓库内已提交的 keystore/ 与 keystore.properties
+      - name: 还原签名密钥
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            mkdir -p keystore
+            echo "$KEYSTORE_BASE64" | base64 -d > keystore/cyclebattery.jks
+            printf 'storeFile=keystore/cyclebattery.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > keystore.properties
+            echo "已从 Secrets 还原签名密钥"
+          elif [ -f keystore.properties ] && [ -f keystore/cyclebattery.jks ]; then
+            echo "未配置 Secrets，使用仓库内已提交的密钥"
+          else
+            echo "::error::仓库内无密钥且未配置 Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD），无法签名"
+            exit 1
+          fi
+
+      - name: 构建 Release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      # versionCode 由构建脚本自动取 commit 数，必须与 tag 中的 C 一致；
+      # 同时导出 APK_VC / APK_VN 供 LSPosed 仓库发布步骤使用
+      - name: 校验 APK versionCode 与 tag 一致
+        run: |
+          set -euo pipefail
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort | tail -1)/aapt2
+          BADGING=$("$AAPT2" dump badging app/build/outputs/apk/release/app-release.apk)
+          VC=$(echo "$BADGING" | grep -o "versionCode='[0-9]*'" | grep -o '[0-9]*')
+          VN=$(echo "$BADGING" | grep -o "versionName='[^']*'" | sed "s/versionName='//;s/'$//")
+          C="${TAG_NAME##*-}"
+          if [ "$VC" -ne "$C" ]; then
+            echo "::error::APK versionCode($VC) 与 tag commit 数($C) 不一致"
+            exit 1
+          fi
+          echo "APK_VC=$VC" >> "$GITHUB_ENV"
+          echo "APK_VN=$VN" >> "$GITHUB_ENV"
+          echo "versionCode=$VC versionName=$VN 与 tag 一致"
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 环形电量 v${{ github.ref_name }}
+          body: |
+            版本 ${{ github.ref_name }}（versionName 1.0）
+
+            安装：下载 APK 直接安装即可覆盖升级（签名一致）。
+          files: app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
+
+      # 发布到 LSPosed 官方模块仓库（Xposed-Modules-Repo）
+      # 仓库索引规则（官方 bot）：
+      #   - 仓库描述（About）必须非空且为模块名
+      #   - 必须有 Release，附件含 .apk，tag 名必须为 VersionCode-VersionName（如 9-1.0）
+      # 需要 Secret：MODULE_REPO_TOKEN —— 对该模块仓库有 Contents: Read/Write 权限的 Token
+      - name: 发布到 LSPosed 模块仓库
+        env:
+          GH_TOKEN: ${{ secrets.MODULE_REPO_TOKEN }}
+          MODULE_REPO: Xposed-Modules-Repo/io.github.imroxy2222.lsp_coloros17cyclebattery
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::未配置 MODULE_REPO_TOKEN，跳过 LSPosed 模块仓库发布"
+            exit 0
+          fi
+          # LSPosed 要求的 tag：VersionCode-VersionName
+          TAG_LSP="${APK_VC}-${APK_VN}"
+          APK=app/build/outputs/apk/release/app-release.apk
+
+          # 1) 同步仓库描述（bot 要求描述 = 模块名，幂等）
+          gh api -X PATCH "repos/$MODULE_REPO" -f description="环形电量" > /dev/null
+          echo "已设置模块仓库描述（About）"
+
+          # 2) 同步 README（空仓库时该请求会创建首个提交和默认分支）
+          SHA=$(gh api "repos/$MODULE_REPO/contents/README.md" --jq .sha 2>/dev/null || true)
+          if [ -n "$SHA" ]; then
+            gh api -X PUT "repos/$MODULE_REPO/contents/README.md" \
+              -f message="docs: sync README (${TAG_NAME})" \
+              -f content="$(base64 -w0 module-repo/README.md)" \
+              -f sha="$SHA" > /dev/null
+          else
+            gh api -X PUT "repos/$MODULE_REPO/contents/README.md" \
+              -f message="docs: init README (${TAG_NAME})" \
+              -f content="$(base64 -w0 module-repo/README.md)" > /dev/null
+          fi
+          echo "README 已同步"
+
+          # 3) 创建 Release：tag 自动指向默认分支 HEAD，附件为 APK
+          if gh release view "$TAG_LSP" --repo "$MODULE_REPO" > /dev/null 2>&1; then
+            echo "::error::LSPosed 仓库已存在 tag $TAG_LSP 的 Release（重复发布？）"
+            exit 1
+          fi
+          gh release create "$TAG_LSP" "$APK" \
+            --repo "$MODULE_REPO" \
+            --title "环形电量 v${APK_VN} (${TAG_NAME})" \
+            --notes "versionCode: ${APK_VC} / versionName: ${APK_VN}
+
+          对应源码版本: ${TAG_NAME}"
+          echo "已发布到 LSPosed 模块仓库：tag=$TAG_LSP"
