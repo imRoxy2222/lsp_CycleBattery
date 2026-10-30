@@ -133,9 +133,11 @@ jobs:
           generate_release_notes: true
 
       # 发布到 LSPosed 官方模块仓库（Xposed-Modules-Repo）
-      # 仓库索引规则（官方 bot）：
-      #   - 仓库描述（About）必须非空且为模块名
-      #   - 必须有 Release，附件含 .apk，tag 名必须为 VersionCode-VersionName（如 9-1.0）
+      # 仓库索引规则（官方 bot）：Release 附件含 .apk，tag 名必须为 VersionCode-VersionName（如 11-1.0）
+      # 说明：
+      #   - 仓库内容（README/SOURCE/SUMMARY/描述）由本地 git 区
+      #     D:/Code/jadx/apk/color17_system/lsp_modules_repo 手动管理，CI 不触碰
+      #   - 修改仓库描述需要 Administration 权限（Contents 不够），描述请在网页端设置
       # 需要 Secret：MODULE_REPO_TOKEN —— 对该模块仓库有 Contents: Read/Write 权限的 Token
       - name: 发布到 LSPosed 模块仓库
         env:
@@ -151,25 +153,7 @@ jobs:
           TAG_LSP="${APK_VC}-${APK_VN}"
           APK=app/build/outputs/apk/release/app-release.apk
 
-          # 1) 同步仓库描述（bot 要求描述 = 模块名，幂等）
-          gh api -X PATCH "repos/$MODULE_REPO" -f description="环形电量" > /dev/null
-          echo "已设置模块仓库描述（About）"
-
-          # 2) 同步 README（空仓库时该请求会创建首个提交和默认分支）
-          SHA=$(gh api "repos/$MODULE_REPO/contents/README.md" --jq .sha 2>/dev/null || true)
-          if [ -n "$SHA" ]; then
-            gh api -X PUT "repos/$MODULE_REPO/contents/README.md" \
-              -f message="docs: sync README (${TAG_NAME})" \
-              -f content="$(base64 -w0 module-repo/README.md)" \
-              -f sha="$SHA" > /dev/null
-          else
-            gh api -X PUT "repos/$MODULE_REPO/contents/README.md" \
-              -f message="docs: init README (${TAG_NAME})" \
-              -f content="$(base64 -w0 module-repo/README.md)" > /dev/null
-          fi
-          echo "README 已同步"
-
-          # 3) 创建 Release：tag 自动指向默认分支 HEAD，附件为 APK
+          # 创建 Release：tag 自动指向默认分支 HEAD，附件为 APK
           if gh release view "$TAG_LSP" --repo "$MODULE_REPO" > /dev/null 2>&1; then
             echo "::error::LSPosed 仓库已存在 tag $TAG_LSP 的 Release（重复发布？）"
             exit 1
