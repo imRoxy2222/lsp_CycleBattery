@@ -23,7 +23,7 @@ object BatteryConfig {
     const val KEY_LOW_LEVEL = "low_level_threshold"
 
     const val DEFAULT_ENABLED = true
-    const val DEFAULT_SIZE_DP = 18f
+    const val DEFAULT_SIZE_DP = 60f
     const val DEFAULT_OFFSET_X_DP = 0f
     const val DEFAULT_OFFSET_Y_DP = 0f
     const val DEFAULT_STROKE_DP = 2.5f
@@ -32,13 +32,13 @@ object BatteryConfig {
     const val DEFAULT_COLOR_LOW = 0xFFFF3B30.toInt()
     const val DEFAULT_LOW_LEVEL = 20
 
-    /** 电量环尺寸上下限（dp） */
-    const val SIZE_MIN_DP = 10f
-    const val SIZE_MAX_DP = 48f
+    /** 电量环外径上下限（dp，圆心为摄像头切孔中心） */
+    const val SIZE_MIN_DP = 20f
+    const val SIZE_MAX_DP = 160f
 
-    /** 位置偏移上下限（dp） */
-    const val OFFSET_MIN_DP = -24f
-    const val OFFSET_MAX_DP = 24f
+    /** 相对摄像头切孔中心的位置偏移上下限（dp） */
+    const val OFFSET_MIN_DP = -80f
+    const val OFFSET_MAX_DP = 80f
 
     /** 线条粗细上下限（dp） */
     const val STROKE_MIN_DP = 1f

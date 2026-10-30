@@ -24,4 +24,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "ColorOS17CycleBattery"
 include(":app")
-include(":stub")

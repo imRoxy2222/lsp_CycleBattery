@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">ColorOS17CycleBattery</string>
+    <string name="app_name">ColorOS17 环形电量</string>
+    <string name="module_description">ColorOS 17 状态栏环形电量：可自定义大小、位置、线条粗细与普通/充电/低电量三态颜色。作用域已静态锁定为系统界面。</string>
 </resources>

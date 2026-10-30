@@ -47,10 +47,6 @@ dependencies {
     compileOnly(libs.libxposed.api)
     // 模块 App 与框架通信（RemotePreferences 配置同步）
     implementation(libs.libxposed.service)
-    // 混淆场景下按结构搜索宿主类
-    implementation(libs.dexkit)
-    // 宿主 SystemUI 类的编译期桩，不打入 APK
-    compileOnly(project(":stub"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

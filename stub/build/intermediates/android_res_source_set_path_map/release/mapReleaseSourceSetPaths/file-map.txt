@@ -1,9 +1,0 @@
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-pngs-0 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\generated\res\pngs\release
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-updated_navigation_xml-1 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\generated\updated_navigation_xml\release
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-mergeReleaseResources-2 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-mergeReleaseResources-3 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-release-4 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\intermediates\merged_res\release\mergeReleaseResources
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-release-5 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\build\intermediates\packaged_res\release\packageReleaseResources
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-main-6 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\src\main\res
-com.oplus.systemui.statusbar.pipeline.battery.ui.drawable.stub-release-7 D:\Code\jadx\apk\color17_system\ColorOS17CycleBattery\stub\src\release\res
-gradleHome-0 C:\Users\Frank2222\.gradle

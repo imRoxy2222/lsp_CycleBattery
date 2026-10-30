@@ -9,8 +9,7 @@ activityCompose = "1.13.0"
 kotlin = "2.2.10"
 composeBom = "2026.02.01"
 libxposedApi = "102.0.0"
-libxposedService = "102.0.1"
-dexkit = "2.0.6"
+libxposedService = "102.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,7 +28,6 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 libxposed-api = { group = "io.github.libxposed", name = "api", version.ref = "libxposedApi" }
 libxposed-service = { group = "io.github.libxposed", name = "service", version.ref = "libxposedService" }
-dexkit = { group = "org.lsposed.dexkit", name = "DexKit", version.ref = "dexkit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
