@@ -20,7 +20,9 @@ import android.view.View;
  * 不可触摸、不获焦、全屏透明的系统内部窗口（TYPE_STATUS_BAR_SUB_PANEL），
  * 以屏幕摄像头切孔（DisplayCutout）的中心为圆心自绘电量环。
  *
- * 状态来源：ACTION_BATTERY_CHANGED 系统广播（电量、是否充电）。
+ * 状态来源：ACTION_BATTERY_CHANGED 系统广播（电量、是否充电）；
+ *           顶部应用请求隐藏状态栏（沉浸式全屏内容）时由 MainHook 经
+ *           setTopAppHidesStatusBar() 推送，此时电量环同步隐藏。
  * 配置来源：MainHook 通过反射调用 applyConfig() 推送（volatile 字段）。
  *
  * 该类运行在 SystemUI 进程，任何异常都必须内部消化，不允许抛出。
@@ -40,6 +42,9 @@ public class CameraRingView extends View {
     // ---- 电池状态 ----
     private volatile int level = -1;
     private volatile boolean charging = false;
+
+    // ---- 全屏状态：顶部应用请求隐藏状态栏（沉浸式全屏内容）时为 true，电量环不绘制 ----
+    private volatile boolean topAppHidesStatusBar = false;
 
     private final Paint levelPaint;
     private final RectF ringRect = new RectF();
@@ -69,6 +74,16 @@ public class CameraRingView extends View {
         this.colorCharging = colorCharging;
         this.colorLow = colorLow;
         this.lowLevelThreshold = lowLevelThreshold;
+        postInvalidate();
+    }
+
+    /**
+     * 由 MainHook 通过反射调用（来自 hook CommandQueue#setTopAppHidesStatusBar）：
+     * 顶部应用请求隐藏状态栏（相册沉浸式看图、视频全屏、阅读等）时置 true，
+     * 电量环随状态栏一起隐藏；状态栏恢复显示时置 false。
+     */
+    public void setTopAppHidesStatusBar(boolean hides) {
+        topAppHidesStatusBar = hides;
         postInvalidate();
     }
 
@@ -134,6 +149,10 @@ public class CameraRingView extends View {
     }
 
     private void drawRing(Canvas canvas) {
+        // 顶部应用隐藏了状态栏（沉浸式全屏内容）时不显示电量环
+        if (topAppHidesStatusBar) {
+            return;
+        }
         // 横屏时不显示电量环
         if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
             return;

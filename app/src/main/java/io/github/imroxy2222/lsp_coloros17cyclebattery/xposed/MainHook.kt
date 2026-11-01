@@ -22,9 +22,13 @@ import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
  * 作用域（META-INF/xposed/scope.list + module.prop 的 staticScope=true）被静态锁定为
  * com.android.systemui，用户无法在 LSPosed 中勾选其他应用。
  *
- * 实现方式：**不 hook 任何宿主（SystemUI）类**。
- *  - 唯一的 Hook 是框架方法 Instrumentation#callApplicationOnCreate，
- *    它永远不会被混淆，仅在 SystemUI 进程内生效，用于拿到 Application 上下文和启动时机。
+ * 实现方式：对宿主的依赖收敛到**唯一一个 AOSP 上游类**上：
+ *  - Hook 1：框架 Instrumentation#callApplicationOnCreate（永不混淆），
+ *    在 SystemUI 进程内拿到 Application 上下文和启动时机。
+ *  - Hook 2：com.android.systemui.statusbar.CommandQueue#setTopAppHidesStatusBar(boolean)
+ *    —— CommandQueue 是 AOSP 上游代码（非 ColorOS 私有），system_server 在
+ *    顶部应用请求隐藏状态栏（沉浸式全屏：相册看图、视频、阅读等）时推送此回调。
+ *    电量环随之隐藏，状态栏恢复时恢复显示。
  *  - 随后在 SystemUI 进程内通过 WindowManager 添加一个全屏透明、不可触摸的系统内部
  *    窗口（TYPE_STATUS_BAR_SUB_PANEL），由 CameraRingView 以摄像头切孔为中心绘制电量环。
  *  - 隐藏系统电池图标请使用 ColorOS 自带的设置项，其他状态栏图标会自然补位。
@@ -41,6 +45,9 @@ class MainHook : XposedModule() {
         /** 模块自绘视图类（由模块 dex 经 PathClassLoader 加载） */
         private const val RING_VIEW_CLASS =
             "io.github.imroxy2222.lsp_coloros17cyclebattery.xposed.CameraRingView"
+
+        /** AOSP 上游的 SystemUI CommandQueue（非 ColorOS 私有），承载沉浸式状态回调 */
+        private const val COMMAND_QUEUE_CLASS = "com.android.systemui.statusbar.CommandQueue"
     }
 
     private val prefs: SharedPreferences by lazy {
@@ -57,6 +64,13 @@ class MainHook : XposedModule() {
 
     /** 当前已添加的悬浮窗视图 */
     private var overlayView: View? = null
+
+    /** 宿主（SystemUI）类加载器，用于解析 CommandQueue */
+    private var hostClassLoader: ClassLoader? = null
+
+    /** 最近一次收到的"顶部应用隐藏状态栏"状态（悬浮窗重建时回放） */
+    @Volatile
+    private var lastTopAppHidesStatusBar: Boolean = false
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
@@ -82,7 +96,9 @@ class MainHook : XposedModule() {
             }
 
             registerPrefsListener()
+            hostClassLoader = param.defaultClassLoader
             hookApplicationCreate()
+            hookCommandQueueTopAppHides()
         } catch (t: Throwable) {
             log(Log.ERROR, TAG, "hookSystemUI failed", t)
         }
@@ -122,6 +138,82 @@ class MainHook : XposedModule() {
             log(Log.INFO, TAG, "hooked Instrumentation#callApplicationOnCreate")
         } catch (t: Throwable) {
             log(Log.ERROR, TAG, "hook application create failed", t)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Hook：CommandQueue#setTopAppHidesStatusBar（沉浸式全屏信号）
+    // ------------------------------------------------------------------
+
+    /**
+     * hook AOSP 上游的 CommandQueue#setTopAppHidesStatusBar(boolean)。
+     * system_server 在顶部应用请求隐藏状态栏（顶部全屏应用进入沉浸式）时经 binder
+     * 推送该回调，先放行宿主原有逻辑，再把状态推送给 CameraRingView。
+     * 失败仅影响"全屏时隐藏电量环"这一增强功能，不影响主体功能。
+     */
+    private fun hookCommandQueueTopAppHides() {
+        try {
+            val cl = hostClassLoader
+                ?: run {
+                    log(Log.WARN, TAG, "host classloader not ready, skip CommandQueue hook")
+                    return
+                }
+            val method = cl.loadClass(COMMAND_QUEUE_CLASS)
+                .getDeclaredMethod("setTopAppHidesStatusBar", Boolean::class.javaPrimitiveType)
+            hook(method)
+                .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                .intercept(object : XposedInterface.Hooker {
+                    override fun intercept(chain: XposedInterface.Chain): Any? {
+                        val result = try {
+                            chain.proceed()
+                        } catch (t: Throwable) {
+                            null
+                        }
+                        try {
+                            val hides = chain.getArg(0) as? Boolean
+                            if (hides != null) {
+                                lastTopAppHidesStatusBar = hides
+                                pushFullscreenState(hides)
+                            }
+                        } catch (t: Throwable) {
+                            log(Log.WARN, TAG, "handle topAppHidesStatusBar failed", t)
+                        }
+                        return result
+                    }
+                })
+            log(Log.INFO, TAG, "hooked CommandQueue#setTopAppHidesStatusBar")
+        } catch (t: Throwable) {
+            log(Log.ERROR, TAG, "hook CommandQueue failed", t)
+        }
+    }
+
+    /** 把全屏状态推送到当前悬浮窗（切回主线程，反射调用避免 Kotlin 断言问题） */
+    private fun pushFullscreenState(hides: Boolean) {
+        mainHandler.post {
+            try {
+                overlayView?.let { view ->
+                    val m = view.javaClass.getMethod(
+                        "setTopAppHidesStatusBar",
+                        Boolean::class.javaPrimitiveType,
+                    )
+                    m.invoke(view, hides)
+                }
+            } catch (t: Throwable) {
+                log(Log.WARN, TAG, "push fullscreen state failed", t)
+            }
+        }
+    }
+
+    /** 悬浮窗（重新）创建时回放最近一次全屏状态 */
+    private fun applyFullscreenState(view: View) {
+        try {
+            val m = view.javaClass.getMethod(
+                "setTopAppHidesStatusBar",
+                Boolean::class.javaPrimitiveType,
+            )
+            m.invoke(view, lastTopAppHidesStatusBar)
+        } catch (t: Throwable) {
+            log(Log.WARN, TAG, "apply fullscreen state failed", t)
         }
     }
 
@@ -193,6 +285,7 @@ class MainHook : XposedModule() {
             return
         }
         applyViewConfig(created)
+        applyFullscreenState(created)
     }
 
     /**
